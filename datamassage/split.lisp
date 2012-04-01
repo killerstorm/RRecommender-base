@@ -112,7 +112,7 @@
           using (hash-value uv)
           do (loop for u being each hash-key of uv
                    using (hash-value v)
-                   do (format-tab-delimited-list f (list link u v))))))
+                   do (format-tab-delimited-list f (list u link v))))))
 
 (defun create-split-data-set (input output-dir 
                               min-link-votes min-user-votes
