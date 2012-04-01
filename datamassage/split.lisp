@@ -12,9 +12,10 @@
         do (princ #\Tab s)
         else do (princ #\Newline s)))
 
-(defun read-votes (file luv)
+(defun read-votes (file)
   (with-open-file (f file)
-    (loop for l = (read-line f nil)
+    (loop with luvl = (make-hash-table)
+          for l = (read-line f nil)
           for lf = (when l (cl-ppcre:split #\Tab l))
           while l
           do (destructuring-bind (us ls vs)
@@ -22,9 +23,18 @@
                (let ((user-id (parse-integer us))
                      (link-id (parse-integer ls))
                      (vote (parse-integer vs)))
-                 (setf (gethash user-id (get-or-init (gethash link-id luv)
-                                                     (make-hash-table)))
-                       vote))))))
+                 (push (cons user-id vote)
+                       (gethash link-id luvl))))
+          finally (return luvl))))
+
+(defun import-votes (luvl luv min-link-votes)
+  (loop for l being each hash-key of luvl
+        using (hash-value uvl)
+        when (>= (length uvl) min-link-votes)
+        do (loop with ht = (get-or-init (gethash l luv)
+                                        (make-hash-table))
+                 for (u . v) in uvl
+                 do (setf (gethash u ht) v))))
 
 (defparameter *prune-log* t)
 
@@ -108,7 +118,9 @@
                               min-link-votes min-user-votes
                               min-info-votes perc-test-links perc-test-votes)
   (let ((luv (make-hash-table)))
-    (read-votes input luv)
+    (import-votes (read-votes input) luv min-link-votes)
+    #+sbcl
+    (sb-ext:gc :full t)
     (prune-luv luv min-link-votes min-user-votes)
     (multiple-value-bind (train info test)
         (split-links luv min-info-votes perc-test-links perc-test-votes)
