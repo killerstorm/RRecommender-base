@@ -52,7 +52,7 @@
                (format-tab-delimited-list (dump-parse-ctx-out-votes ctx)
                                           (list user-id link-id vote))))))
 
-(defun import-many-file (in-dir out-dir &optional limit)
+(defun import-many-files (in-dir out-dir &optional limit)
   (with-open-file (votes (merge-pathnames "votes.txt" out-dir)
                          :direction :output :if-exists :supersede)
     (with-open-file (users (merge-pathnames "users.txt" out-dir)
@@ -73,8 +73,3 @@
                                    (parse-dumper-stream s ctx))
                      (error (e) (format log "error: ~a (~s)~%" e e)))
                 do (format log "end ~a, ~a~%" (pathname-name file) (get-universal-time)))))))))
-
-  
-
-               
-                   
