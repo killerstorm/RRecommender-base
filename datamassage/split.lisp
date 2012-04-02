@@ -99,7 +99,7 @@
 
     (loop for u in (butlast (alexandria:shuffle 
                              (alexandria:hash-table-keys train-users-ht))
-                            (round (* (hash-table-count train-users-ht) (- 1 perc-test-links))))
+                            (round (* (hash-table-count train-users-ht) (- 1 perc-test-users))))
           do (setf (gethash u test-users-ht) t))
 
     (loop for link being each hash-key of luv
@@ -117,7 +117,7 @@
                  (loop for u being each hash-key of uv
                      using (hash-value v)
                      when (gethash u train-users-ht)
-                     do (setf (gethash u (if (gethash member u test-users)
+                     do (setf (gethash u (if (gethash u test-users)
                                              test-votes
                                              info-votes))
                               v))
