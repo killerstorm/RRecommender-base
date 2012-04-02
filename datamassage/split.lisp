@@ -36,6 +36,15 @@
                  for (u . v) in uvl
                  do (setf (gethash u ht) v))))
 
+(defun user-vote-counts (luv)
+  (loop with user-votes = (make-hash-table)
+        for link being each hash-key of luv
+        using (hash-value uv)
+        do (loop for user being each hash-key of uv
+                 do (incf (gethash user user-votes 0)))
+        finally (return user-votes)))
+
+
 (defparameter *prune-log* t)
 
 (defun prune-luv (luv min-link-votes min-user-votes)
@@ -50,24 +59,18 @@
 
     (when *prune-log* (format t "~a links left~%" (hash-table-count luv)))
 
-    (loop with user-votes = (make-hash-table)
-	  for link being each hash-key of luv
-	  using (hash-value uv)
-	  do (loop for user being each hash-key of uv
-		   do (incf (gethash user user-votes 0)))
-	  finally (progn
-		    (setf pruned-users
-			  (loop for user being each hash-key of user-votes
-				using (hash-value c)
-				when (< c min-user-votes)
-				collect user))
-		    (when *prune-log*
-		      (format t "~a users, ~a pruned, ~a left~%"
-			      (hash-table-count user-votes)
-			      (length pruned-users)
-			      (- (hash-table-count user-votes)
-				 (length pruned-users))))))
-
+    (let ((uvc (user-vote-counts luv)))
+      (setf pruned-users (loop for user being each hash-key of uvc
+                               using (hash-value c)
+                               when (< c min-user-votes)
+                               collect user))
+      (when *prune-log*
+        (format t "~a users, ~a pruned, ~a left~%"
+                (hash-table-count uvc)
+                (length pruned-users)
+                (- (hash-table-count uvc)
+                   (length pruned-users)))))
+    
     (when pruned-users
       (loop for link being each hash-key of luv
 	    using (hash-value uv)
@@ -75,36 +78,52 @@
                      do (remhash pt uv)))
       (prune-luv luv min-link-votes min-user-votes))))
 
-(defun split-links (luv min-info-votes perc-test-links perc-test-votes)
+(defun split-links (luv min-link-votes min-user-votes
+                    min-info-votes perc-test-links perc-test-users)
   (let ((test-links (butlast (alexandria:shuffle (alexandria:hash-table-keys luv))
                              (round (* (hash-table-count luv) (- 1 perc-test-links)))))
+        (test-users-ht (make-hash-table))
+        (train-users-ht)
         (train-luv (make-hash-table))
         (info-luv (make-hash-table))
         (test-luv (make-hash-table)))
+
     (loop for link being each hash-key of luv
           using (hash-value uv)
-          for is-test-link = (and (member link test-links)
-                                  (> (hash-table-count uv) min-info-votes))
-          if is-test-link 
-          do (let* ((users (alexandria:hash-table-keys uv))
-                    (n-info-votes (min (max min-info-votes
-                                            (round (* (- 1 perc-test-votes)
-                                                      (length users))))
-                                       (- (length users) 1)))
-                    (test-users (butlast users n-info-votes))
+          unless (member link test-links)
+          do (setf (gethash link train-luv) (alexandria:copy-hash-table uv)))
+
+    (prune-luv train-luv min-link-votes min-user-votes)
+
+    (setf train-users-ht (user-vote-counts train-luv))
+
+    (loop for u in (butlast (alexandria:shuffle 
+                             (alexandria:hash-table-keys train-users-ht))
+                            (round (* (hash-table-count train-users-ht) (- 1 perc-test-links))))
+          do (setf (gethash u test-users-ht) t))
+
+    (loop for link being each hash-key of luv
+          using (hash-value uv)
+          when (and (member link test-links)
+                    (> (hash-table-count uv) min-info-votes))
+          do (let* ((link-users (alexandria:hash-table-keys uv))
+                    (users (remove-if-not (lambda (u) (gethash u train-users-ht))
+                                          link-users))
+                    (info-users (remove-if (lambda (u) (gethash u test-users-ht))
+                                           users))
                     (info-votes (make-hash-table))
                     (test-votes (make-hash-table)))
-               (loop for u being each hash-key of uv
+               (when (>= (length info-users min-info-users))
+                 (loop for u being each hash-key of uv
                      using (hash-value v)
-                     do (setf (gethash u (if (member u test-users)
+                     when (gethash u train-users-ht)
+                     do (setf (gethash u (if (gethash member u test-users)
                                              test-votes
                                              info-votes))
                               v))
-               (setf (gethash link info-luv) info-votes
-                     (gethash link test-luv) test-votes))
-          else 
-          do (setf (gethash link train-luv) uv))
-        (values train-luv info-luv test-luv)))
+                 (setf (gethash link info-luv) info-votes
+                       (gethash link test-luv) test-votes))))
+    (values train-luv info-luv test-luv)))
 
 (defun store-luv (file luv)
   (with-open-file (f file :direction :output :if-exists :supersede)
@@ -126,5 +145,7 @@
         (split-links luv min-info-votes perc-test-links perc-test-votes)
       (store-luv (merge-pathnames #p"train-votes.txt" output-dir) train)
       (store-luv (merge-pathnames #p"info-votes.txt" output-dir) info)
-      (store-luv (merge-pathnames #p"test-votes.txt" output-dir) test))
-    ()))
+      (store-luv (merge-pathnames #p"test-votes.txt" output-dir) test)
+      (with-open-file (s (merge-pathnames #p"test-users.txt" output-dir) :direction :output)
+        (loop for u being each hash-key of (user-vote-counts test)
+              do (print u s))))))
