@@ -113,11 +113,11 @@
                                            users))
                     (info-votes (make-hash-table))
                     (test-votes (make-hash-table)))
-               (when (>= (length info-users min-info-users))
+               (when (>= (length info-users) min-info-votes)
                  (loop for u being each hash-key of uv
                      using (hash-value v)
                      when (gethash u train-users-ht)
-                     do (setf (gethash u (if (gethash u test-users)
+                     do (setf (gethash u (if (gethash u test-users-ht)
                                              test-votes
                                              info-votes))
                               v))
