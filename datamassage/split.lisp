@@ -142,7 +142,7 @@
     (sb-ext:gc :full t)
     (prune-luv luv min-link-votes min-user-votes)
     (multiple-value-bind (train info test)
-        (split-links luv min-info-votes perc-test-links perc-test-votes)
+        (split-links luv min-link-votes min-user-votes min-info-votes perc-test-links perc-test-votes)
       (store-luv (merge-pathnames #p"train-votes.txt" output-dir) train)
       (store-luv (merge-pathnames #p"info-votes.txt" output-dir) info)
       (store-luv (merge-pathnames #p"test-votes.txt" output-dir) test)
