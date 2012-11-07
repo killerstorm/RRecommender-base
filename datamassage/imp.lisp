@@ -1,19 +1,8 @@
-(require 'alexandria)
-(require 'cl-fad)
-(require 'cl-ppcre)
-
 (defstruct dump-parse-ctx
   link-ids user-ids
   out-votes
   out-users
   out-links)
-
-(defun format-tab-delimited-list (s list)
-  (loop for (i next) on list
-        do (princ i s)
-        if next 
-        do (princ #\Tab s)
-        else do (princ #\Newline s)))
 
 (defun resolve-user (user ctx)
   (let* ((ht (dump-parse-ctx-user-ids ctx))
